@@ -4,6 +4,8 @@ import os
 with open('udyr_quotes.json') as f:
     data = json.load(f)
 
+BOT_NAME = 'Udyr Bot'
+
 DISCORD_BOT_TOKEN = os.environ['DISCORD_BOT_TOKEN']
 
 HELP_TEXT = '''

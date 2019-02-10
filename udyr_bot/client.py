@@ -1,55 +1,48 @@
-from random import randrange
+from logging import getLogger
 
 import discord
 
-from .constants import GITHUB_PROJECT_URL, HELP_TEXT, QUOTES, QUOTES_LEN
+from .commands import handle_message, handle_member_join, handle_reaction_add, handle_server_join
+
+log = getLogger(__name__)
+
+client: discord.Client = discord.Client()
 
 
-def get_random_quote():
-    return f'🔥{QUOTES[randrange(QUOTES_LEN)]}🔥'
+@client.event
+async def on_ready():
+    log.info('Logged in as', end=' ')
+    log.info(client.user.name)
+    log.info(client.user.id)
+    log.info('------')
 
 
-def get_help_text():
-    return HELP_TEXT
+@client.event
+async def on_resumed():
+    log.info('Bot has been resumed')
 
 
-def get_github_url():
-    return GITHUB_PROJECT_URL
+@client.event
+async def on_message(message: discord.Message):
+    if message.channel.type == discord.ChannelType.text:
+        await handle_message(client, message)
 
 
-commands = {
-    '!quote': get_random_quote,
-    '!help': get_help_text,
-    '!github': get_github_url
-}
+@client.event
+async def on_reaction_add(reaction: discord.Reaction, member: discord.User or discord.Member):
+    await handle_reaction_add(client, reaction, member)
 
 
-def create_client():
-    client: discord.Client = discord.Client()
+@client.event
+async def on_member_join(member: discord.Member):
+    await handle_member_join(client, member)
 
-    @client.event
-    async def on_ready():
-        print('Logged in as', end=' ')
-        print(client.user.name)
-        print(client.user.id)
-        print('------')
 
-    @client.event
-    async def on_message(message):
-        content = message.content.lower()
+@client.event
+async def on_server_join(server: discord.Server):
+    await handle_server_join(client, server)
 
-        if not content.startswith('!') or len(content) < 2 or message.author == client.user:
-            return
 
-        first_word = content.split()[0]
-        try:
-            func = commands[first_word]
-        except KeyError:
-            func = commands['!help']
-
-        res = func()
-
-        await client.send_typing(message.channel)
-        await client.send_message(message.channel, res)
-
-    return client
+@client.event
+async def on_error(event, *args, **kwargs):
+    log.info(f'Unhandled error for event: {event}')
