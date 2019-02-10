@@ -41,7 +41,10 @@ class Client(discord.Client):
         await self.send_message(message.channel, res)
 
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
-        log.info(f'{reaction} added by {member} to {reaction.message.content}')
+        if reaction.custom_emoji:
+            log.info(f'{reaction.emoji.name} added by {member} to {reaction.message.content}')
+        else:
+            log.info(f'{reaction.emoji} added by {member} to {reaction.message.content}')
 
     async def on_member_join(self, member: discord.Member):
         log.info(f'{member} has joined {member.server}')
