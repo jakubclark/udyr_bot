@@ -5,6 +5,7 @@ with open('udyr_quotes.json') as f:
     data = json.load(f)
 
 BOT_NAME = 'Udyr Bot'
+COMMAND_PREFIX = '!'
 
 DISCORD_BOT_TOKEN = os.environ['DISCORD_BOT_TOKEN']
 

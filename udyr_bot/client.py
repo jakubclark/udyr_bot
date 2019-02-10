@@ -3,7 +3,7 @@ from logging import getLogger
 import discord
 
 from .commands import commands
-from .constants import BOT_NAME
+from .constants import BOT_NAME, COMMAND_PREFIX
 
 log = getLogger(__name__)
 
@@ -15,32 +15,30 @@ class Client(discord.Client):
         log.info(self.user.name)
         log.info(self.user.id)
         log.info('------')
+        servers = [server.name for server in self.servers]
+        log.info(f'Servers `{BOT_NAME}` is present in: {servers}')
 
     async def on_resumed(self):
         log.info('Bot has been resumed')
 
     async def on_message(self, message: discord.Message):
+        member: discord.Member = message.author
+        server: discord.Server = member.server
+        first_word = message.content.split()[0]
+
+        log.info(
+            f'Server: {server} Chanel: {message.channel.name} Member: {member} Message: {message.content}')
+        if not first_word.startswith(COMMAND_PREFIX):
+            return
         try:
-            member: discord.Member = message.author
-            server = member.server
-            content = message.content
-            first_word = content.split()[0]
+            func = commands[first_word]
+        except KeyError:
+            func = commands['!help']
 
-            log.info(
-                f'Server: {server} Member: {member} Message: {message.content}')
-            if not first_word.startswith('!'):
-                return
-            try:
-                func = commands[first_word]
-            except KeyError:
-                func = commands['!help']
+        res = func()
 
-            res = func()
-
-            await self.send_typing(message.channel)
-            await self.send_message(message.channel, res)
-        except Exception as e:
-            print(e)
+        await self.send_typing(message.channel)
+        await self.send_message(message.channel, res)
 
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
         log.info(f'{reaction} added by {member} to {reaction.message.content}')
@@ -56,7 +54,7 @@ class Client(discord.Client):
         log.info(f'Unhandled error for event: {event}')
 
     async def add_animal_role(self, member: discord.Member):
-        for role in member.server.roles[1:]:
+        for role in member.server.roles[1:]:  # Ignore @everyone
             if role.name == 'Animals':
                 log.info(f'Adding the `Animals` role for {member}')
                 await self.add_roles(member, role)
