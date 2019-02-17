@@ -10,6 +10,9 @@ log = getLogger(__name__)
 
 class Client(discord.Client):
 
+    def __init__(self):
+        super().__init__()
+
     async def on_ready(self):
         log.info('Logged in as')
         log.info(self.user.name)
@@ -41,10 +44,17 @@ class Client(discord.Client):
         await self.send_message(message.channel, res)
 
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
-        if reaction.custom_emoji:
-            log.info(f'{reaction.emoji.name} added by {member} to {reaction.message.content}')
-        else:
-            log.info(f'{reaction.emoji} added by {member} to {reaction.message.content}')
+        message: discord.Message = reaction.message
+        emoji: discord.Emoji = reaction.emoji
+        try:
+            log.info(f'Adding {reaction.emoji} to {reaction.message.content}')
+            await self.add_reaction(message, emoji)
+        except discord.Forbidden:
+            log.info(f'Forbidden to add reaction')
+        except discord.NotFound:
+            log.info(f'Did not find the emoji')
+        except discord.HTTPException:
+            log.info(f'HTTPExcetion when adding reaction')
 
     async def on_member_join(self, member: discord.Member):
         log.info(f'{member} has joined {member.server}')
