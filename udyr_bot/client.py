@@ -36,7 +36,7 @@ class Client(discord.Client):
         try:
             func = commands[first_word]
         except KeyError:
-            func = commands['!help']
+            return
 
         res = func()
 
@@ -65,15 +65,3 @@ class Client(discord.Client):
 
     async def on_error(self, event, *args, **kwargs):
         log.info(f'Unhandled error for event: {event}')
-
-    async def add_animal_role(self, member: discord.Member):
-        for role in member.server.roles[1:]:  # Ignore @everyone
-            if role.name == 'Animals':
-                log.info(f'Adding the `Animals` role for {member}')
-                await self.add_roles(member, role)
-                break
-        else:
-            log.info('Did not find the `Animals` role!')
-
-
-client = Client()
