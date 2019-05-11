@@ -25,12 +25,17 @@ class Client(discord.Client):
         log.info('Bot has been resumed')
 
     async def on_message(self, message: discord.Message):
-        member: discord.Member = message.author
-        server: discord.Server = member.server
-        first_word = message.content.split()[0]
+        author: discord.Member = message.author
 
-        log.info(
-            f'Server: {server} Chanel: {message.channel.name} Member: {member} Message: {message.content}')
+        if isinstance(author, discord.Member):
+            # server
+            server: discord.Server = author.server
+            log.info(
+                f'Server: {server} Chanel: {message.channel.name} Author: {author} Message: {message.content}')
+
+        first_word = message.content.split()[0]
+        cmd = message.content.split()[1:]
+
         if not first_word.startswith(COMMAND_PREFIX):
             return
         try:
@@ -38,7 +43,7 @@ class Client(discord.Client):
         except KeyError:
             return
 
-        res = func()
+        res = func(cmd)
 
         await self.send_typing(message.channel)
         await self.send_message(message.channel, res)
@@ -64,4 +69,4 @@ class Client(discord.Client):
         log.info(f'{BOT_NAME} joined {server.name}')
 
     async def on_error(self, event, *args, **kwargs):
-        log.info(f'Unhandled error for event: {event}')
+        log.info(f'Unhandled error for event: {event}, args={args}, kwargs={kwargs}')

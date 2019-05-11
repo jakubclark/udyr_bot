@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 "discord.py" = "==0.16.12"
+requests = "*"
 
 [dev-packages]
 "pylint" = "*"
