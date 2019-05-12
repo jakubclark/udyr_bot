@@ -140,7 +140,7 @@ class LeagueEntryDTO:
             type_ = 'Ranked Flex SR'
         else:
             return None
-        return f'{type_} - {self.tier} {self.rank} - {self.league_points} LP'
+        return f'{type_} - {self.tier} {self.rank} - {self.league_points} LP - {self.wins} wins - {self.losses} losses'
 
     def __str__(self):
         return (f'LeagueEntryDTO(queueType={self.queue_type}, summonerName={self.summoner_name}, '
@@ -167,7 +167,7 @@ def get_summoner_info(msg: list):
     if username == '':
         return f'Please specify a username'
 
-    log.info(f'Getting op.gg info for region={region}, username={username}')
+    log.info(f'Getting summoner info for region={region}, username={username}')
 
     base_url = RiotAPIDomain.get_domain(region)
 
@@ -212,7 +212,7 @@ def get_summoner_info(msg: list):
                 res_.append(entry_str)
 
         if len(res_) == 0:
-            return f'{summoner.name} has not played ranked LUL'
+            return f'Summoner {summoner.name} has not played ranked on {region.value}'
 
         return f'Ranked Info for Summoner {summoner.name}\n' + '\n'.join(res_)
     except Exception as e:
