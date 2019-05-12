@@ -348,7 +348,7 @@ def get_game_info(msg: List[str]):
     participants = []
 
     for part in curr_game.participants:
-        str_ = f'`|{part.summoner_name} | {part.champion_id} | {part.spell1_id} | {part.spell2_id} |`'
+        str_ = f'`| {part.summoner_name} | {part.champion_id} | {part.spell1_id} | {part.spell2_id} |`'
         if part.team_id == 100:
             participants.insert(0, str_)
         else:
