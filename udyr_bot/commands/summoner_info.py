@@ -1,7 +1,9 @@
 from enum import Enum
 from logging import getLogger
+from typing import List
 
 import requests
+from discord import Colour, Embed
 
 from ..constants import RIOT_DEV_API_KEY
 
@@ -24,6 +26,13 @@ class Region(Enum):
     OCE = 'OC'
     TR = 'TR'
     RU = 'RU'
+
+    @classmethod
+    def from_str(cls, str_):
+        try:
+            return cls(str_)
+        except ValueError:
+            return None
 
 
 class RiotAPIDomain(Enum):
@@ -149,23 +158,100 @@ class LeagueEntryDTO:
                 f'tier={self.tier}, rank={self.rank}, leaguePoints={self.league_points}')
 
 
-def get_summoner_info(msg: list):
-    log.info(f'get_opgg={msg}')
+class BannedChampion:
+    def __init__(self, pick_turn, champion_id, team_id):
+        self.pick_turn: int = pick_turn
+        self.champion_id: int = champion_id
+        self.team_id: int = team_id
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(data['pickTurn'], data['championId'], data['teamId'])
+
+    def __str__(self):
+        return f'BannedChampion(pick_turn={self.pick_turn}, champion_id={self.champion_id})'
+
+
+class Observer:
+    def __init__(self, encryption_key):
+        self.encryption_key = encryption_key
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(data['encryptionKey'])
+
+    def __str__(self):
+        return f'Observer(encrypton_key={self.encryption_key})'
+
+
+class CurrentGameParticipant:
+
+    def __init__(self, profile_icon_id, champion_id, summoner_name, team_id, spell1_id, spell2_id, summoner_id):
+        self.profile_icon_id: int = profile_icon_id
+        self.champion_id: int = champion_id
+        self.summoner_name: str = summoner_name
+        self.team_id: int = team_id
+        self.spell1_id: int = spell1_id
+        self.spell2_id: int = spell2_id
+        self.summoner_id: str = summoner_id
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(data['profileIconId'], data['championId'], data['summonerName'],
+                   data['teamId'], data['spell1Id'], data['spell2Id'], data['summonerId'])
+
+    def __str__(self):
+        return (f'{self.summoner_name} | {self.champion_id} | '
+                f'{self.spell1_id} | {self.spell2_id}')
+
+
+class CurrentGameInfo:
+    def __init__(self, game_id, game_start_time, platform_id, game_mode, map_id, game_type, banned_champions,
+                 observers, participants, game_len, game_queue_config_id):
+        self.game_id: int = game_id
+        self.game_start_time: int = game_start_time
+        self.platform_id: str = platform_id
+        self.game_mode: str = game_mode
+        self.map_id: int = map_id
+        self.game_type: str = game_type
+        self.banned_champions: List[BannedChampion] = [
+            BannedChampion.from_json(entry) for entry in banned_champions]
+        self.observers: Observer = Observer.from_json(observers)
+        self.participants: List[CurrentGameParticipant] = [CurrentGameParticipant.from_json(entry) for
+                                                           entry in participants]
+        self.game_len: int = game_len
+        self.game_queue_config_id: int = game_queue_config_id
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(data['gameId'], data['gameStartTime'], data['platformId'],
+                   data['gameMode'], data['mapId'], data['gameType'], data['bannedChampions'],
+                   data['observers'], data['participants'], data['gameLength'], data['gameQueueConfigId'])
+
+    def __str__(self):
+        str_participants = '\n'.join([str(part) for part in self.participants])
+        return (f'game_mode={self.game_mode}, game_len={self.game_len}\n'
+                f'{str_participants}')
+
+
+def get_username_region(msg: List[str]) -> (str, Region):
     if '--region' in msg:
         index = msg.index('--region')
-        try:
-            region = Region(msg[index + 1])
-        except ValueError:
-            log.error(f'Invalid region. reg={msg[index + 1]}')
-            return f'Provided an invalid region'
-
+        region = Region.from_str(msg[index+1])
         username = ''.join(msg[:index])
     else:
         region: Region = Region.EUNE
         username: str = ''.join(msg)
+    return username, region
+
+
+def get_summoner_info(msg: List[str]):
+    username, region = get_username_region(msg)
 
     if username == '':
-        return f'Please specify a username'
+        return 'Please provide a username'
+    if region is None:
+        return 'Please provide a valid region'
 
     log.info(f'Getting summoner info for region={region}, username={username}')
 
@@ -178,7 +264,8 @@ def get_summoner_info(msg: list):
         return f'Summoner {username} on region={region.value} was not found'
 
     if summoner_info_res.status_code != 200:
-        log.error(f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
+        log.error(
+            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
         return f'Error when connecting to the Riot Games API.'
 
     summoner = SummonerDTO.from_json(summoner_info_res.json())
@@ -191,7 +278,8 @@ def get_summoner_info(msg: list):
     if league_info_res.status_code == 404:
         return f'Summoner {username} does not have any ranked queue entries'
     if league_info_res.status_code != 200:
-        log.error(f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
+        log.error(
+            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
         return f'Error when connecting to the Riot Games API.'
 
     league_info_set = []
@@ -217,3 +305,60 @@ def get_summoner_info(msg: list):
         return f'Ranked Info for Summoner {summoner.name}\n' + '\n'.join(res_)
     except Exception as e:
         log.error(f'Exception, e={e}')
+
+
+def get_game_info(msg: List[str]):
+    username, region = get_username_region(msg)
+    if username == '':
+        return 'Please provide a username'
+    if region is None:
+        return 'Please provide a valid region'
+
+    log.info(f'Getting game info for region={region}, username={username}')
+
+    base_url = RiotAPIDomain.get_domain(region)
+
+    summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{username}'
+    summoner_info_res = requests.get(summoner_info_url, params=riot_api_params)
+
+    if summoner_info_res.status_code == 404:
+        return f'Summoner {username} on region={region.value} was not found'
+
+    if summoner_info_res.status_code != 200:
+        log.error(
+            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
+        return f'Error when connecting to the Riot Games API.'
+
+    summoner = SummonerDTO.from_json(summoner_info_res.json())
+
+    encrypted_id = summoner.id
+    game_info_url = f'https://{base_url}/lol/spectator/v4/active-games/by-summoner/{encrypted_id}'
+    game_info_res = requests.get(game_info_url, params=riot_api_params)
+
+    if game_info_res.status_code == 404:
+        return f'Summoner {summoner.name} is not currently in a game'
+    if game_info_res.status_code != 200:
+        log.error(
+            f'Error when connecting to the Riot Games API. res.text={game_info_res.text}')
+        return f'Error when connecting to the Riot Games API.'
+
+    curr_game: CurrentGameInfo = CurrentGameInfo.from_json(
+        game_info_res.json())
+
+    participants = []
+
+    for part in curr_game.participants:
+        str_ = f'`|{part.summoner_name} | {part.champion_id} | {part.spell1_id} | {part.spell2_id} |`'
+        if part.team_id == 100:
+            participants.insert(0, str_)
+        else:
+            participants.append(str_)
+
+    participants.insert(0, '`| Summoner Name | Champion ID | Spell 1 ID | Spell 2 ID |`')
+
+    res_str = '\n'.join(participants)
+
+    embed_res = Embed(colour=Colour.dark_green(),
+                      title=f'Game summary for {summoner.name}',
+                      description=res_str)
+    return embed_res

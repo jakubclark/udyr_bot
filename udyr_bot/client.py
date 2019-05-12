@@ -49,7 +49,11 @@ class Client(discord.Client):
         res = func(cmd)
 
         await self.send_typing(message.channel)
-        await self.send_message(message.channel, res)
+
+        if isinstance(res, discord.Embed):
+            await self.send_message(message.channel, embed=res)
+        else:
+            await self.send_message(message.channel, content=res)
 
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
         message: discord.Message = reaction.message
@@ -72,4 +76,5 @@ class Client(discord.Client):
         log.info(f'{BOT_NAME} joined {server.name}')
 
     async def on_error(self, event, *args, **kwargs):
-        log.info(f'Unhandled error for event: {event}, args={args}, kwargs={kwargs}')
+        log.info(
+            f'Unhandled error for event: {event}, args={args}, kwargs={kwargs}')
