@@ -25,19 +25,22 @@ class Client(discord.Client):
         log.info('Bot has been resumed')
 
     async def on_message(self, message: discord.Message):
-        author: discord.Member = message.author
+        first_word = message.content.split()[0]
+        if not first_word.startswith(COMMAND_PREFIX):
+            return
+
+        cmd = message.content.split()[1:]
+        author = message.author
 
         if isinstance(author, discord.Member):
             # server
             server: discord.Server = author.server
             log.info(
-                f'Server: {server} Chanel: {message.channel.name} Author: {author} Message: {message.content}')
+                f'Server: {server}, Channel: {message.channel.name}, Author: {author}, Message: {message.content}')
+        else:
+            log.info(
+                f'Author: {author}, Message: {message.content}')
 
-        first_word = message.content.split()[0]
-        cmd = message.content.split()[1:]
-
-        if not first_word.startswith(COMMAND_PREFIX):
-            return
         try:
             func = commands[first_word]
         except KeyError:

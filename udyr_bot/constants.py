@@ -1,7 +1,7 @@
 import json
 import os
 
-with open('udyr_quotes.json') as f:
+with open('data/udyr_quotes.json') as f:
     data = json.load(f)
 
 BOT_NAME = 'Udyr Bot'
