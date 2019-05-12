@@ -16,7 +16,7 @@ Udyr-Bot Commands:
         !help   - This help message
         !github - Get the GitHub address of the project
         !summ - Get Ranked Information for a summoner: `!summ Donger Dingo`, `!summ yassuo --region NA`
-        !game - Get Information for a currently playing game: `!game Donger Dingo`, `!game Imatqpie --region NA`'''
+        !game - Get Information for a currently playing game: `!game Donger Dingo`, `!game Imaqtpie --region NA`'''
 QUOTES = data['quotes']
 QUOTES_LEN = len(QUOTES)
 GITHUB_PROJECT_URL = 'https://github.com/jakubclark/udyr_bot'
