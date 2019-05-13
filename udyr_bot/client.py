@@ -46,9 +46,9 @@ class Client(discord.Client):
         except KeyError:
             return
 
-        res = func(cmd)
-
         await self.send_typing(message.channel)
+
+        res = func(cmd)
 
         if isinstance(res, discord.Embed):
             await self.send_message(message.channel, embed=res)
