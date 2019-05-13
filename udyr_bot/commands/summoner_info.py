@@ -23,7 +23,7 @@ class Region(Enum):
     LAN = 'LAN'
     LAS = 'LAS'
     NA = 'NA'
-    OCE = 'OC'
+    OCE = 'OCE'
     TR = 'TR'
     RU = 'RU'
 
@@ -49,7 +49,7 @@ class RiotAPIDomain(Enum):
     RU = 'ru.api.riotgames.com'
 
     @classmethod
-    def get_domain(cls, region: Region):
+    def from_region(cls, region: Region):
         if region == Region.EUNE:
             return cls.EUNE.value
 
@@ -105,6 +105,22 @@ class SummonerDTO:
                    data['revisionDate'], data['id'],
                    data['accountId'])
 
+    @classmethod
+    def from_username(cls, name: str, region: Region):
+        base_url = RiotAPIDomain.from_region(region)
+        summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{name}'
+        summoner_info_res = requests.get(
+            summoner_info_url, params=riot_api_params)
+
+        if summoner_info_res.status_code == 404:
+            return f'Summoner {name} on region={region.value} was not found'
+
+        if summoner_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
+        return cls.from_json(summoner_info_res.json())
+
     def __str__(self):
         return (f'SummonerDTO(profileIconId={self.profile_icon_id}, name={self.name}, '
                 f'puuid={self.puuid}, summoner_level={self.summoner_level}, '
@@ -141,8 +157,27 @@ class LeagueEntryDTO:
                    data['freshBlood'], data['tier'], data['summonerId'],
                    data['leaguePoints'])
 
-    def pretty(self):
+    @classmethod
+    def from_summoner(cls, summoner: SummonerDTO, region: Region) -> List['LeagueEntryDTO']:
+        base_url = RiotAPIDomain.from_region(region)
+        league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{summoner.id}'
+        league_info_res = requests.get(league_info_url, params=riot_api_params)
 
+        if league_info_res.status_code == 404:
+            return f'Summoner {summoner.name} does not have any ranked queue entries'
+        if league_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={league_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
+
+        league_info_set = []
+
+        for entry in league_info_res.json():
+            league_info_set.append(LeagueEntryDTO.from_json(entry))
+
+        return league_info_set
+
+    def __repr__(self):
         if self.queue_type == 'RANKED_SOLO_5x5':
             type_ = 'Ranked Solo'
         elif self.queue_type == 'RANKED_FLEX_SR':
@@ -228,6 +263,21 @@ class CurrentGameInfo:
                    data['gameMode'], data['mapId'], data['gameType'], data['bannedChampions'],
                    data['observers'], data['participants'], data['gameLength'], data['gameQueueConfigId'])
 
+    @classmethod
+    def from_summoner(cls, summoner: SummonerDTO, region: Region) -> 'CurrentGameInfo':
+        base_url = RiotAPIDomain.from_region(region)
+        game_info_url = f'https://{base_url}/lol/spectator/v4/active-games/by-summoner/{summoner.id}'
+        game_info_res = requests.get(game_info_url, params=riot_api_params)
+
+        if game_info_res.status_code == 404:
+            return f'Summoner {summoner.name} is not currently in a game'
+        if game_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={game_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
+
+        return CurrentGameInfo.from_json(game_info_res.json())
+
     def __str__(self):
         str_participants = '\n'.join([str(part) for part in self.participants])
         return (f'game_mode={self.game_mode}, game_len={self.game_len}\n'
@@ -247,7 +297,6 @@ def get_username_region(msg: List[str]) -> (str, Region):
 
 def get_summoner_info(msg: List[str]):
     username, region = get_username_region(msg)
-
     if username == '':
         return 'Please provide a username'
     if region is None:
@@ -255,56 +304,30 @@ def get_summoner_info(msg: List[str]):
 
     log.info(f'Getting summoner info for region={region}, username={username}')
 
-    base_url = RiotAPIDomain.get_domain(region)
+    summoner = SummonerDTO.from_username(username, region)
+    if isinstance(summoner, str):
+        return summoner
 
-    summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{username}'
-    summoner_info_res = requests.get(summoner_info_url, params=riot_api_params)
+    league_info_set = LeagueEntryDTO.from_summoner(summoner, region)
+    if isinstance(league_info_set, str):
+        return league_info_set
 
-    if summoner_info_res.status_code == 404:
-        return f'Summoner {username} on region={region.value} was not found'
+    res = []
+    for entry in league_info_set:
+        entry_str = repr(entry)
+        if entry_str is None:
+            continue
+        if entry_str.startswith('Ranked Solo'):
+            res.insert(0, entry_str)
+        else:
+            res.append(entry_str)
 
-    if summoner_info_res.status_code != 200:
-        log.error(
-            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
-        return f'Error when connecting to the Riot Games API.'
+    if len(res) == 0:
+        return f'Summoner {summoner.name} has not played ranked on {region.value}'
 
-    summoner = SummonerDTO.from_json(summoner_info_res.json())
-
-    encrypted_id = summoner.id
-
-    league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{encrypted_id}'
-    league_info_res = requests.get(league_info_url, params=riot_api_params)
-
-    if league_info_res.status_code == 404:
-        return f'Summoner {username} does not have any ranked queue entries'
-    if league_info_res.status_code != 200:
-        log.error(
-            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
-        return f'Error when connecting to the Riot Games API.'
-
-    league_info_set = []
-
-    for entry in league_info_res.json():
-        league_info_set.append(LeagueEntryDTO.from_json(entry))
-
-    res_ = []
-    try:
-        for entry in league_info_set:
-            entry_str = entry.pretty()
-            if entry_str is None:
-                continue
-
-            if entry_str.startswith('Ranked Solo'):
-                res_.insert(0, entry_str)
-            else:
-                res_.append(entry_str)
-
-        if len(res_) == 0:
-            return f'Summoner {summoner.name} has not played ranked on {region.value}'
-
-        return f'Ranked Info for Summoner {summoner.name}\n' + '\n'.join(res_)
-    except Exception as e:
-        log.error(f'Exception, e={e}')
+    return Embed(colour=Colour.dark_purple(),
+                 title=f'Ranked Info for {summoner.name}',
+                 description='\n'.join(res))
 
 
 def get_game_info(msg: List[str]):
@@ -316,49 +339,23 @@ def get_game_info(msg: List[str]):
 
     log.info(f'Getting game info for region={region}, username={username}')
 
-    base_url = RiotAPIDomain.get_domain(region)
+    summoner = SummonerDTO.from_username(username, region)
+    if isinstance(summoner, str):
+        return summoner
 
-    summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{username}'
-    summoner_info_res = requests.get(summoner_info_url, params=riot_api_params)
-
-    if summoner_info_res.status_code == 404:
-        return f'Summoner {username} on region={region.value} was not found'
-
-    if summoner_info_res.status_code != 200:
-        log.error(
-            f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
-        return f'Error when connecting to the Riot Games API.'
-
-    summoner = SummonerDTO.from_json(summoner_info_res.json())
-
-    encrypted_id = summoner.id
-    game_info_url = f'https://{base_url}/lol/spectator/v4/active-games/by-summoner/{encrypted_id}'
-    game_info_res = requests.get(game_info_url, params=riot_api_params)
-
-    if game_info_res.status_code == 404:
-        return f'Summoner {summoner.name} is not currently in a game'
-    if game_info_res.status_code != 200:
-        log.error(
-            f'Error when connecting to the Riot Games API. res.text={game_info_res.text}')
-        return f'Error when connecting to the Riot Games API.'
-
-    curr_game: CurrentGameInfo = CurrentGameInfo.from_json(
-        game_info_res.json())
+    current_game_info = CurrentGameInfo.from_summoner(summoner, region)
+    if isinstance(current_game_info, str):
+        return current_game_info
 
     participants = []
-
-    for part in curr_game.participants:
+    for part in current_game_info.participants:
         str_ = f'`| {part.summoner_name} | {part.champion_id} | {part.spell1_id} | {part.spell2_id} |`'
         if part.team_id == 100:
             participants.insert(0, str_)
         else:
             participants.append(str_)
-
     participants.insert(0, '`| Summoner Name | Champion ID | Spell 1 ID | Spell 2 ID |`')
 
-    res_str = '\n'.join(participants)
-
-    embed_res = Embed(colour=Colour.dark_green(),
-                      title=f'Game summary for {summoner.name}',
-                      description=res_str)
-    return embed_res
+    return Embed(colour=Colour.dark_purple(),
+                 title=f'Game Summary for {summoner.name}',
+                 description='\n'.join(participants))
