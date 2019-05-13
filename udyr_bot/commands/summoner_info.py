@@ -106,14 +106,17 @@ class SummonerDTO:
                    data['accountId'])
 
     @classmethod
-    def from_username(cls, name: str, region: Region):
+    def from_username(cls, username: str, region: Region):
         base_url = RiotAPIDomain.from_region(region)
-        summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{name}'
+        summoner_info_url = f'https://{base_url}/lol/summoner/v4/summoners/by-name/{username}'
         summoner_info_res = requests.get(
             summoner_info_url, params=riot_api_params)
 
+        log.info(f'Getting summoner info for username={username}, region={region}')
+
         if summoner_info_res.status_code == 404:
-            return f'Summoner {name} on region={region.value} was not found'
+            log.info(f'Summoner {username} on region={region.value} was not found')
+            return f'Summoner {username} on region={region.value} was not found'
 
         if summoner_info_res.status_code != 200:
             log.error(
@@ -163,6 +166,8 @@ class LeagueEntryDTO:
         league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{summoner.id}'
         league_info_res = requests.get(league_info_url, params=riot_api_params)
 
+        log.info(f'Getting ranked info for summoner_name={summoner.name}, region={region}')
+
         if league_info_res.status_code != 200:
             log.error(
                 f'Error when connecting to the Riot Games API. res.text={league_info_res.text}')
@@ -179,6 +184,8 @@ class LeagueEntryDTO:
         base_url = RiotAPIDomain.from_region(region)
         league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{encrypted_summoner_id}'
         league_info_res = requests.get(league_info_url, params=riot_api_params)
+
+        log.info(f'Getting ranked info for encrypted_summoner_id={encrypted_summoner_id}, region={region}')
 
         if league_info_res.status_code != 200:
             log.error(
@@ -284,6 +291,8 @@ class CurrentGameInfo:
         game_info_url = f'https://{base_url}/lol/spectator/v4/active-games/by-summoner/{summoner.id}'
         game_info_res = requests.get(game_info_url, params=riot_api_params)
 
+        log.info(f'Getting current game infor for summoner_name={summoner.name}, region={region}')
+
         if game_info_res.status_code == 404:
             return f'Summoner {summoner.name} is not currently in a game'
         if game_info_res.status_code != 200:
@@ -317,7 +326,7 @@ def get_summoner_info(msg: List[str]):
     if region is None:
         return 'Please provide a valid region'
 
-    log.info(f'Getting summoner info for region={region}, username={username}')
+    log.info(f'get_summoner_info | username={username} | region={region}')
 
     summoner = SummonerDTO.from_username(username, region)
     if isinstance(summoner, str):
@@ -351,7 +360,7 @@ def get_game_info(msg: List[str]):
     if region is None:
         return 'Please provide a valid region'
 
-    log.info(f'Getting game info for region={region}, username={username}')
+    log.info(f'get_game_info | username={username} | region={region}')
 
     summoner = SummonerDTO.from_username(username, region)
     if isinstance(summoner, str):
