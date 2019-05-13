@@ -163,18 +163,33 @@ class LeagueEntryDTO:
         league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{summoner.id}'
         league_info_res = requests.get(league_info_url, params=riot_api_params)
 
-        if league_info_res.status_code == 404:
-            return f'Summoner {summoner.name} does not have any ranked queue entries'
         if league_info_res.status_code != 200:
             log.error(
                 f'Error when connecting to the Riot Games API. res.text={league_info_res.text}')
             return f'Error when connecting to the Riot Games API.'
 
         league_info_set = []
-
         for entry in league_info_res.json():
             league_info_set.append(LeagueEntryDTO.from_json(entry))
 
+        return league_info_set
+
+    @classmethod
+    def from_encrypted_summoner_id(cls, encrypted_summoner_id: str, region: Region) -> List['LeagueEntryDTO']:
+        base_url = RiotAPIDomain.from_region(region)
+        league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{encrypted_summoner_id}'
+        league_info_res = requests.get(league_info_url, params=riot_api_params)
+
+        if league_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={league_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
+
+        league_info_set = []
+        for entry in league_info_res.json():
+            league_info_set.append(LeagueEntryDTO.from_json(entry))
+        if len(league_info_set) == 0:
+            return None
         return league_info_set
 
     def __repr__(self):
@@ -287,7 +302,7 @@ class CurrentGameInfo:
 def get_username_region(msg: List[str]) -> (str, Region):
     if '--region' in msg:
         index = msg.index('--region')
-        region = Region.from_str(msg[index+1])
+        region = Region.from_str(msg[index + 1])
         username = ''.join(msg[:index])
     else:
         region: Region = Region.EUNE
@@ -311,6 +326,8 @@ def get_summoner_info(msg: List[str]):
     league_info_set = LeagueEntryDTO.from_summoner(summoner, region)
     if isinstance(league_info_set, str):
         return league_info_set
+    if league_info_set is None:
+        return f'Summoner {summoner.name} has not played ranked on {region.value}'
 
     res = []
     for entry in league_info_set:
@@ -321,9 +338,6 @@ def get_summoner_info(msg: List[str]):
             res.insert(0, entry_str)
         else:
             res.append(entry_str)
-
-    if len(res) == 0:
-        return f'Summoner {summoner.name} has not played ranked on {region.value}'
 
     return Embed(colour=Colour.dark_purple(),
                  title=f'Ranked Info for {summoner.name}',
@@ -348,14 +362,40 @@ def get_game_info(msg: List[str]):
         return current_game_info
 
     participants = []
-    for part in current_game_info.participants:
-        str_ = f'`| {part.summoner_name} | {part.champion_id} | {part.spell1_id} | {part.spell2_id} |`'
-        if part.team_id == 100:
-            participants.insert(0, str_)
+    for participant in current_game_info.participants:
+        for entry in LeagueEntryDTO.from_encrypted_summoner_id(participant.summoner_id, region):
+            if entry.queue_type == 'RANKED_SOLO_5x5':
+                participant_summary = (
+                    f'`| {participant.summoner_name} | {entry.tier} {entry.rank}  - {entry.league_points} LP | '
+                    f'{participant.champion_id} |  {participant.spell1_id} | {participant.spell2_id} |`')
+                if participant.team_id == 100:
+                    participants.insert(0, participant_summary)
+                else:
+                    participants.append(participant_summary)
+                break
         else:
-            participants.append(str_)
-    participants.insert(0, '`| Summoner Name | Champion ID | Spell 1 ID | Spell 2 ID |`')
+            participant_summary = (
+                f'`| {participant.summoner_name} | None | '
+                f'{participant.champion_id} |  {participant.spell1_id} | {participant.spell2_id} |`')
+            if participant.team_id == 100:
+                participants.insert(0, participant_summary)
+            else:
+                participants.append(participant_summary)
 
+    team1 = participants[0:5]
+    team2 = participants[5:]
+
+    res_str = '`| Summoner Name | Rank | Champion ID | Spell 1 ID | Spell 2 ID |`' + \
+              '\n' + \
+              '`|--------------------------------------------------------------|`' \
+              '\n' + \
+              '\n'.join(team1) + \
+              '\n' + \
+              '`|--------------------------------------------------------------|`' + \
+              '\n' + \
+              '\n'.join(team2) + \
+              '\n' + \
+              '`|--------------------------------------------------------------|`'
     return Embed(colour=Colour.dark_purple(),
                  title=f'Game Summary for {summoner.name}',
-                 description='\n'.join(participants))
+                 description=res_str)
