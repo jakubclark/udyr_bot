@@ -69,19 +69,16 @@ class Client(discord.Client):
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
         message: discord.Message = reaction.message
         emoji: discord.Emoji = reaction.emoji
+
         try:
-            log.info(f'Adding {reaction.emoji} to {reaction.message.content}')
-            await self.add_reaction(message, emoji)
+            log.info(f'Adding {emoji} to {reaction.message.content}')
+            await message.add_reaction(emoji)
         except discord.Forbidden:
             log.info(f'Forbidden to add reaction')
         except discord.NotFound:
             log.info(f'Did not find the emoji')
         except discord.HTTPException:
             log.info(f'HTTPExcetion when adding reaction')
-
-    async def on_member_join(self, member: discord.Member):
-        log.info(f'{member} has joined {member.server}')
-        await self.add_animal_role(member)
 
     async def on_server_join(self, server: discord.Guild):
         log.info(f'{BOT_NAME} joined {server.name}')
