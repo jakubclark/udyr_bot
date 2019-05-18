@@ -353,9 +353,16 @@ def get_summoner_info(msg: List[str]):
         else:
             res.append(entry_str)
 
+    url_compatible_name = summoner.name.replace(' ', '%20')
+
     embed_content = BASE_EMBED.copy()
     embed_content['title'] = f'Ranked Info for {summoner.name}'
     embed_content['description'] = '\n'.join(res)
+    embed_content['thumbnail'] = {
+        'url': f'http://avatar.leagueoflegends.com/{region.value.lower()}/{url_compatible_name}.png',
+        'height': 45,
+        'width': 45
+    }
     return Embed.from_dict(embed_content)
 
 

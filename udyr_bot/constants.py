@@ -28,7 +28,7 @@ BASE_EMBED = {
     'color': Color.dark_green().value,
     'thumbnail': {
         'url': 'https://raw.githubusercontent.com/jakubclark/udyr_bot/master/data/udyr1.png',
-        'height': 30,
-        'width': 30
+        'height': 45,
+        'width': 45
     }
 }
