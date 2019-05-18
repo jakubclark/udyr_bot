@@ -1,17 +1,13 @@
 import json
-import os
 
 from discord import Color
 
 with open('data/udyr_quotes.json') as f:
     QUOTES = json.load(f)
+QUOTES_LEN = len(QUOTES)
 
 BOT_NAME = 'Udyr Bot'
 COMMAND_PREFIX = '!'
-
-DISCORD_BOT_TOKEN = os.environ['DISCORD_BOT_TOKEN']
-RIOT_DEV_API_KEY = os.environ['RIOT_DEV_API_KEY']
-
 
 HELP_TEXT = '\n '.join([
     '!quote  - Random Udyr quote',
@@ -20,7 +16,6 @@ HELP_TEXT = '\n '.join([
     '!summ   - Get Ranked Information for a summoner: `!summ Donger Dingo`, `!summ yassuo --region NA`',
     '!game   - Get Information for a currently playing game: `!game Donger Dingo`, `!game Imaqtpie --region NA`'
 ])
-QUOTES_LEN = len(QUOTES)
 GITHUB_PROJECT_URL = 'https://github.com/jakubclark/udyr_bot'
 
 

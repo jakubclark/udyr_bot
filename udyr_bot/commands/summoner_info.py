@@ -5,12 +5,13 @@ from typing import List
 import requests
 from discord import Embed
 
-from ..constants import BASE_EMBED, RIOT_DEV_API_KEY
+from ..config import Config
+from ..constants import BASE_EMBED
 
 log = getLogger(__name__)
 
 riot_api_params = {
-    'api_key': RIOT_DEV_API_KEY
+    'api_key': Config.get('riot_dev_api_key')
 }
 
 
@@ -208,6 +209,8 @@ class LeagueEntryDTO:
             type_ = 'Ranked Solo'
         elif self.queue_type == 'RANKED_FLEX_SR':
             type_ = 'Ranked Flex SR'
+        elif self.queue_type == 'RANKED_FLEX_TT':
+            type_ = 'Ranked Flex TT'
         else:
             return None
         return f'{type_} - {self.tier} {self.rank} - {self.league_points} LP - {self.wins} wins - {self.losses} losses'
@@ -331,7 +334,7 @@ def get_summoner_info(msg: List[str]):
     if region is None:
         return 'Please provide a valid region'
 
-    log.info(f'get_summoner_info | username={username} | region={region}')
+    log.info(' | '.join(['get_summoner_info', f'username={username}', 'region={region}']))
 
     summoner = SummonerDTO.from_username(username, region)
     if isinstance(summoner, str):
@@ -373,7 +376,7 @@ def get_game_info(msg: List[str]):
     if region is None:
         return 'Please provide a valid region'
 
-    log.info(f'get_game_info | username={username} | region={region}')
+    log.info(' | '.join(['get_game_info', f'username={username}', 'region={region}']))
 
     summoner = SummonerDTO.from_username(username, region)
     if isinstance(summoner, str):
