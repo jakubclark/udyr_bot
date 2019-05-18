@@ -25,18 +25,31 @@ class Client(discord.Client):
         log.info('Bot has been resumed')
 
     async def on_message(self, message: discord.Message):
-        first_word = message.content.split()[0]
+        if message.author == self.user:
+            return
+        try:
+            await self._on_message(message)
+        except Exception as e:
+            log.error(f'Eror when processing message. e={e}')
+
+    async def _on_message(self, message: discord.Message):
+        if message.author == self.user:
+            return
+
+        split_conent = message.content.split()
+        first_word = split_conent[0]
+
         if not first_word.startswith(COMMAND_PREFIX):
             return
 
         cmd = message.content.split()[1:]
-        author = message.author
+        author: discord.Member or discord.User = message.author
+        channel: discord.TextChannel = message.channel
 
         if isinstance(author, discord.Member):
-            # server
-            server: discord.Server = author.server
+            guild: discord.Guild = author
             log.info(
-                f'Server: {server}, Channel: {message.channel.name}, Author: {author}, Message: {message.content}')
+                f'Guild: {guild}, Channel: {message.channel.name}, Author: {author}, Message: {message.content}')
         else:
             log.info(
                 f'Author: {author}, Message: {message.content}')
@@ -46,14 +59,12 @@ class Client(discord.Client):
         except KeyError:
             return
 
-        await self.send_typing(message.channel)
-
         res = func(cmd)
 
         if isinstance(res, discord.Embed):
-            await self.send_message(message.channel, embed=res)
+            await channel.send(embed=res)
         else:
-            await self.send_message(message.channel, content=res)
+            await channel.send(content=res)
 
     async def on_reaction_add(self, reaction: discord.Reaction, member: discord.User or discord.Member):
         message: discord.Message = reaction.message
@@ -72,7 +83,7 @@ class Client(discord.Client):
         log.info(f'{member} has joined {member.server}')
         await self.add_animal_role(member)
 
-    async def on_server_join(self, server: discord.Server):
+    async def on_server_join(self, server: discord.Guild):
         log.info(f'{BOT_NAME} joined {server.name}')
 
     async def on_error(self, event, *args, **kwargs):

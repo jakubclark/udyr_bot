@@ -3,9 +3,9 @@ from logging import getLogger
 from typing import List
 
 import requests
-from discord import Colour, Embed
+from discord import Embed
 
-from ..constants import RIOT_DEV_API_KEY
+from ..constants import BASE_EMBED, RIOT_DEV_API_KEY
 
 log = getLogger(__name__)
 
@@ -112,10 +112,12 @@ class SummonerDTO:
         summoner_info_res = requests.get(
             summoner_info_url, params=riot_api_params)
 
-        log.info(f'Getting summoner info for username={username}, region={region}')
+        log.info(
+            f'Getting summoner info for username={username}, region={region}')
 
         if summoner_info_res.status_code == 404:
-            log.info(f'Summoner {username} on region={region.value} was not found')
+            log.info(
+                f'Summoner {username} on region={region.value} was not found')
             return f'Summoner {username} on region={region.value} was not found'
 
         if summoner_info_res.status_code != 200:
@@ -166,7 +168,8 @@ class LeagueEntryDTO:
         league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{summoner.id}'
         league_info_res = requests.get(league_info_url, params=riot_api_params)
 
-        log.info(f'Getting ranked info for summoner_name={summoner.name}, region={region}')
+        log.info(
+            f'Getting ranked info for summoner_name={summoner.name}, region={region}')
 
         if league_info_res.status_code != 200:
             log.error(
@@ -185,7 +188,8 @@ class LeagueEntryDTO:
         league_info_url = f'https://{base_url}/lol/league/v4/entries/by-summoner/{encrypted_summoner_id}'
         league_info_res = requests.get(league_info_url, params=riot_api_params)
 
-        log.info(f'Getting ranked info for encrypted_summoner_id={encrypted_summoner_id}, region={region}')
+        log.info(
+            f'Getting ranked info for encrypted_summoner_id={encrypted_summoner_id}, region={region}')
 
         if league_info_res.status_code != 200:
             log.error(
@@ -291,7 +295,8 @@ class CurrentGameInfo:
         game_info_url = f'https://{base_url}/lol/spectator/v4/active-games/by-summoner/{summoner.id}'
         game_info_res = requests.get(game_info_url, params=riot_api_params)
 
-        log.info(f'Getting current game infor for summoner_name={summoner.name}, region={region}')
+        log.info(
+            f'Getting current game infor for summoner_name={summoner.name}, region={region}')
 
         if game_info_res.status_code == 404:
             return f'Summoner {summoner.name} is not currently in a game'
@@ -348,9 +353,10 @@ def get_summoner_info(msg: List[str]):
         else:
             res.append(entry_str)
 
-    return Embed(colour=Colour.dark_purple(),
-                 title=f'Ranked Info for {summoner.name}',
-                 description='\n'.join(res))
+    embed_content = BASE_EMBED.copy()
+    embed_content['title'] = f'Ranked Info for {summoner.name}'
+    embed_content['description'] = '\n'.join(res)
+    return Embed.from_dict(embed_content)
 
 
 def get_game_info(msg: List[str]):
@@ -405,6 +411,8 @@ def get_game_info(msg: List[str]):
               '\n'.join(team2) + \
               '\n' + \
               '`|--------------------------------------------------------------|`'
-    return Embed(colour=Colour.dark_purple(),
-                 title=f'Game Summary for {summoner.name}',
-                 description=res_str)
+
+    embed_content = BASE_EMBED.copy()
+    embed_content['title'] = f'Game Summary for {summoner.name}'
+    embed_content['description'] = res_str
+    return Embed.from_dict(embed_content)

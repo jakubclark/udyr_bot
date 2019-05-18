@@ -1,14 +1,23 @@
 from random import randrange
 
-from ..constants import GITHUB_PROJECT_URL, HELP_TEXT, QUOTES, QUOTES_LEN
+from discord import Embed
+
+from ..constants import (BASE_EMBED, GITHUB_PROJECT_URL, HELP_TEXT, QUOTES,
+                         QUOTES_LEN)
 
 
 def get_random_quote(*args):
-    return f'🔥{QUOTES[randrange(QUOTES_LEN)]}🔥'
+    quote = f'🔥{QUOTES[randrange(QUOTES_LEN)]}🔥'
+    embed_content = BASE_EMBED.copy()
+    embed_content['description'] = quote
+    return Embed.from_dict(embed_content)
 
 
 def get_help_text(*args):
-    return HELP_TEXT
+    embed_content = BASE_EMBED.copy()
+    embed_content['title'] = 'Udyr Bot Commands'
+    embed_content['description'] = HELP_TEXT
+    return Embed.from_dict(embed_content)
 
 
 def get_github_url(*args):
