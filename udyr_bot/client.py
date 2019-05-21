@@ -2,15 +2,20 @@ from logging import getLogger
 
 import discord
 
+from udyr_bot.commands.summoner_info import RiotGamesDAO
 from .commands import commands
+from .config import Config
 from .constants import BOT_NAME, COMMAND_PREFIX
 
 log = getLogger(__name__)
 
 
 class Client(discord.Client):
-
     def __init__(self):
+        self.riot_games_dao = RiotGamesDAO(Config.get('riot_dev_api_key'))
+        self.commands = commands
+        self.commands['!summ'] = self.riot_games_dao.get_summoner_info
+        self.commands['!game'] = self.riot_games_dao.get_game_info
         super().__init__()
 
     async def on_ready(self):

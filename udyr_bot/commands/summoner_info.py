@@ -1,18 +1,12 @@
 from enum import Enum
 from logging import getLogger
-from typing import List
+from typing import List, Union
 
 import requests
 from discord import Embed
-
-from ..config import Config
 from ..constants import BASE_EMBED
 
 log = getLogger(__name__)
-
-riot_api_params = {
-    'api_key': Config.get('riot_dev_api_key')
-}
 
 
 class Region(Enum):
@@ -316,113 +310,149 @@ class CurrentGameInfo:
                 f'{str_participants}')
 
 
-def get_username_region(msg: List[str]) -> (str, Region):
-    if '--region' in msg:
-        index = msg.index('--region')
-        region = Region.from_str(msg[index + 1])
-        username = ''.join(msg[:index])
-    else:
-        region: Region = Region.EUNE
-        username: str = ''.join(msg)
-    return username, region
+class RiotGamesDAO:
+    def __init__(self, api_key):
+        self.session = requests.Session()
+        self.session.headers.update({'X-Riot-Token': api_key})
 
-
-def get_summoner_info(msg: List[str]):
-    username, region = get_username_region(msg)
-    if username == '':
-        return 'Please provide a username'
-    if region is None:
-        return 'Please provide a valid region'
-
-    log.info(' | '.join(['get_summoner_info', f'username={username}', 'region={region}']))
-
-    summoner = SummonerDTO.from_username(username, region)
-    if isinstance(summoner, str):
-        return summoner
-
-    league_info_set = LeagueEntryDTO.from_summoner(summoner, region)
-    if isinstance(league_info_set, str):
-        return league_info_set
-    if league_info_set is None:
-        return f'Summoner {summoner.name} has not played ranked on {region.value}'
-
-    res = []
-    for entry in league_info_set:
-        entry_str = repr(entry)
-        if entry_str is None:
-            continue
-        if entry_str.startswith('Ranked Solo'):
-            res.insert(0, entry_str)
+    @staticmethod
+    def get_username_region(msg: List[str]) -> (str, Region):
+        if '--region' in msg:
+            index = msg.index('--region')
+            region = Region.from_str(msg[index + 1])
+            username = ''.join(msg[:index])
         else:
-            res.append(entry_str)
+            region: Region = Region.EUNE
+            username: str = ''.join(msg)
+        return username, region
 
-    url_compatible_name = summoner.name.replace(' ', '%20')
+    def get_summoner_dto(self, username, region) -> SummonerDTO:
+        base_url = RiotAPIDomain.from_region(region)
+        summoner_info_res = self.session.get(f'https://{base_url}/lol/summoner/v4/summoners/by-name/{username}')
 
-    embed_content = BASE_EMBED.copy()
-    embed_content['title'] = f'Ranked Info for {summoner.name}'
-    embed_content['description'] = '\n'.join(res)
-    embed_content['thumbnail'] = {
-        'url': f'http://avatar.leagueoflegends.com/{region.value.lower()}/{url_compatible_name}.png',
-        'height': 45,
-        'width': 45
-    }
-    return Embed.from_dict(embed_content)
+        log.info(
+            f'Getting summoner info for username={username}, region={region}')
 
+        if summoner_info_res.status_code == 404:
+            log.info(
+                f'Summoner {username} on region={region.value} was not found')
+            return f'Summoner {username} on region={region.value} was not found'
 
-def get_game_info(msg: List[str]):
-    username, region = get_username_region(msg)
-    if username == '':
-        return 'Please provide a username'
-    if region is None:
-        return 'Please provide a valid region'
+        if summoner_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={summoner_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
+        return SummonerDTO.from_json(summoner_info_res.json())
 
-    log.info(' | '.join(['get_game_info', f'username={username}', 'region={region}']))
+    def get_league_entry(self, summoner: SummonerDTO, region: Region) -> List[LeagueEntryDTO]:
+        base_url = RiotAPIDomain.from_region(region)
+        league_info_res = self.session.get(f'https://{base_url}/lol/league/v4/entries/by-summoner/{summoner.id}')
 
-    summoner = SummonerDTO.from_username(username, region)
-    if isinstance(summoner, str):
-        return summoner
+        log.info(
+            f'Getting ranked info for summoner_name={summoner.name}, region={region}')
 
-    current_game_info = CurrentGameInfo.from_summoner(summoner, region)
-    if isinstance(current_game_info, str):
-        return current_game_info
+        if league_info_res.status_code != 200:
+            log.error(
+                f'Error when connecting to the Riot Games API. res.text={league_info_res.text}')
+            return f'Error when connecting to the Riot Games API.'
 
-    participants = []
-    for participant in current_game_info.participants:
-        for entry in LeagueEntryDTO.from_encrypted_summoner_id(participant.summoner_id, region):
-            if entry.queue_type == 'RANKED_SOLO_5x5':
+        return [LeagueEntryDTO.from_json(entry) for entry in league_info_res.json()]
+
+    def get_summoner_info(self, msg: List[str]) -> Union[Embed, str]:
+        username, region = self.get_username_region(msg)
+        if username == '':
+            return 'Please provide a username'
+        if region is None:
+            return 'Please provide a valid region'
+
+        log.info(' | '.join(['get_summoner_info', f'username={username}', 'region={region}']))
+
+        summoner = self.get_summoner_dto(username, region)
+        if isinstance(summoner, str):
+            return summoner
+
+        league_info_set = self.get_league_entry(summoner, region)
+        if isinstance(league_info_set, str):
+            return league_info_set
+        if league_info_set is None:
+            return f'Summoner {summoner.name} has not played ranked on {region.value}'
+
+        res = []
+        for entry in league_info_set:
+            entry_str = repr(entry)
+            if entry_str is None:
+                continue
+            if entry_str.startswith('Ranked Solo'):
+                res.insert(0, entry_str)
+            else:
+                res.append(entry_str)
+
+        url_compatible_name = summoner.name.replace(' ', '%20')
+
+        embed_content = BASE_EMBED.copy()
+        embed_content['title'] = f'Ranked Info for {summoner.name}'
+        embed_content['description'] = '\n'.join(res)
+        embed_content['thumbnail'] = {
+            'url': f'http://avatar.leagueoflegends.com/{region.value.lower()}/{url_compatible_name}.png',
+            'height': 45,
+            'width': 45
+        }
+        return Embed.from_dict(embed_content)
+
+    def get_game_info(self, msg: List[str]) -> Union[Embed, str]:
+        username, region = self.get_username_region(msg)
+        if username == '':
+            return 'Please provide a username'
+        if region is None:
+            return 'Please provide a valid region'
+
+        log.info(' | '.join(['get_game_info', f'username={username}', 'region={region}']))
+
+        summoner = SummonerDTO.from_username(username, region)
+        if isinstance(summoner, str):
+            return summoner
+
+        current_game_info = CurrentGameInfo.from_summoner(summoner, region)
+        if isinstance(current_game_info, str):
+            return current_game_info
+
+        participants = []
+        for participant in current_game_info.participants:
+            for entry in LeagueEntryDTO.from_encrypted_summoner_id(participant.summoner_id, region):
+                if entry.queue_type == 'RANKED_SOLO_5x5':
+                    participant_summary = (
+                        f'`| {participant.summoner_name} | {entry.tier} {entry.rank}  - {entry.league_points} LP | '
+                        f'{participant.champion_id} |  {participant.spell1_id} | {participant.spell2_id} |`')
+                    if participant.team_id == 100:
+                        participants.insert(0, participant_summary)
+                    else:
+                        participants.append(participant_summary)
+                    break
+            else:
                 participant_summary = (
-                    f'`| {participant.summoner_name} | {entry.tier} {entry.rank}  - {entry.league_points} LP | '
+                    f'`| {participant.summoner_name} | None | '
                     f'{participant.champion_id} |  {participant.spell1_id} | {participant.spell2_id} |`')
                 if participant.team_id == 100:
                     participants.insert(0, participant_summary)
                 else:
                     participants.append(participant_summary)
-                break
-        else:
-            participant_summary = (
-                f'`| {participant.summoner_name} | None | '
-                f'{participant.champion_id} |  {participant.spell1_id} | {participant.spell2_id} |`')
-            if participant.team_id == 100:
-                participants.insert(0, participant_summary)
-            else:
-                participants.append(participant_summary)
 
-    team1 = participants[0:5]
-    team2 = participants[5:]
+        team1 = participants[0:5]
+        team2 = participants[5:]
 
-    res_str = '`| Summoner Name | Rank | Champion ID | Spell 1 ID | Spell 2 ID |`' + \
-              '\n' + \
-              '`|--------------------------------------------------------------|`' \
-              '\n' + \
-              '\n'.join(team1) + \
-              '\n' + \
-              '`|--------------------------------------------------------------|`' + \
-              '\n' + \
-              '\n'.join(team2) + \
-              '\n' + \
-              '`|--------------------------------------------------------------|`'
+        res_str = '`| Summoner Name | Rank | Champion ID | Spell 1 ID | Spell 2 ID |`' + \
+                  '\n' + \
+                  '`|--------------------------------------------------------------|`' \
+                  '\n' + \
+                  '\n'.join(team1) + \
+                  '\n' + \
+                  '`|--------------------------------------------------------------|`' + \
+                  '\n' + \
+                  '\n'.join(team2) + \
+                  '\n' + \
+                  '`|--------------------------------------------------------------|`'
 
-    embed_content = BASE_EMBED.copy()
-    embed_content['title'] = f'Game Summary for {summoner.name}'
-    embed_content['description'] = res_str
-    return Embed.from_dict(embed_content)
+        embed_content = BASE_EMBED.copy()
+        embed_content['title'] = f'Game Summary for {summoner.name}'
+        embed_content['description'] = res_str
+        return Embed.from_dict(embed_content)
